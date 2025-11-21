@@ -16,7 +16,7 @@
 // --- PINES ---
 // ¡IMPORTANTE! NO USAR 0 y 1. Usamos 10 y 11.
 const int PIN_RX_BT = 2;  // Aquí entra el cable TX del Módulo BT
-const int PIN_TX_BT = 3;  // Aquí entra el cable RX del Módulo BT
+const int PIN_TX_BT = 4;  // Aquí entra el cable RX del Módulo BT
 const int PIN_SENSOR = A0;
 const int PIN_LED_TESTIGO = 13;
 
