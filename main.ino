@@ -1,12 +1,12 @@
 /*
  * ALCOHOLÍMETRO FINAL - ARQUITECTURA SEPARADA
  * * CORRECCIÓN CRÍTICA:
- * - Se usa SoftwareSerial en pines 10 y 11 para no chocar con el USB.
+ * - Se usa SoftwareSerial en pines 2 y 4 para no chocar con el USB.
  * - El Monitor Serie (PC) SOLO sirve para dar órdenes (Menú).
  * - El Bluetooth (App) recibe SOLO datos numéricos del sensor.
  * * CABLEADO:
- * - HC-05 TX  -> Arduino Pin 10
- * - HC-05 RX  -> Arduino Pin 11
+ * - HC-05 TX  -> Arduino Pin 2
+ * - HC-05 RX  -> Arduino Pin 4
  * - Sensor    -> A0
  */
 
@@ -14,7 +14,7 @@
 #include <EEPROM.h>
 
 // --- PINES ---
-// ¡IMPORTANTE! NO USAR 0 y 1. Usamos 10 y 11.
+// ¡IMPORTANTE! NO USAR 0 y 1. Usamos 2 y 4.
 const int PIN_RX_BT = 2;  // Aquí entra el cable TX del Módulo BT
 const int PIN_TX_BT = 4;  // Aquí entra el cable RX del Módulo BT
 const int PIN_SENSOR = A0;
@@ -47,8 +47,8 @@ void setup() {
 
   Serial.println("\n--- SISTEMA LISTO Y SEPARADO ---");
   Serial.println("CONEXION:");
-  Serial.println("  * Bluetooth TX conectado al Pin 10");
-  Serial.println("  * Bluetooth RX conectado al Pin 11");
+  Serial.println("  * Bluetooth TX conectado al Pin 2");
+  Serial.println("  * Bluetooth RX conectado al Pin 4");
   Serial.println("MENU PC (Escribe el numero y dale Enter):");
   Serial.println("  [1] FORZAR INICIO (Simular que App envio 'I')");
   Serial.println("  [2] FORZAR PARADA (Simular que App envio 'X')");
