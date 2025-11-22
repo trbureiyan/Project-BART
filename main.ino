@@ -1,21 +1,19 @@
 /*
- * PROYECTO: ALCOHOLÍMETRO IOT - VERSIÓN PRODUCCIÓN FINAL
+ * PROYECTO: ALCOHOLÍMETRO IOT - VERSIÓN PRODUCCIÓN FINAL (v2)
  * AUTORES: Brayan Toro Bustos & Pablo Trujillo Artunduaga
- * UNIVERSIDAD SURCOLOMBIANA - Curso de programacion fisica
+ * UNIVERSIDAD SURCOLOMBIANA - Computación Física
  *
- * CARACTERÍSTICAS:
- * - Autocalibración de aire limpio al inicio.
- * - Filtro de promedio móvil para lecturas estables.
- * - Comunicación SoftwareSerial robusta en pines 2 y 4.
- * - Protocolo optimizado para App Inventor (Delimiter 10).
+ * DESCRIPCIÓN:
+ * Sistema de detección de alcohol con sensor MQ-3 (6 pines) recableado correctamente.
+ * - Salida Física: Barra de 8 LEDs progresiva.
+ * - Salida Bluetooth: Escala simplificada de 3 niveles (1=Verde, 2=Amarillo, 3=Rojo).
  *
  * MAPEO DE HARDWARE:
  * - Arduino UNO
- * - Sensor MQ-3: A0
- * - Bluetooth HC-05/IS-05: TX -> Pin 2, RX -> Pin 4
- * - Botones: Pin 11 (Guardar), Pin 12 (Leer/Historial) [Ajustar según tu diagrama final]
- * - LEDs: Pines 3, 5, 6, 7, 8, 9, 10, 13 (Ajustar según tu orden físico real)
-*/
+ * - Sensor MQ-3: A0 (Usando circuito divisor de voltaje externo)
+ * - Bluetooth HC-05: TX -> Pin 2, RX -> Pin 4 (SoftwareSerial)
+ * - LEDs: Pines 5 a 12
+ */
 
 #include <SoftwareSerial.h>
 #include <EEPROM.h>
@@ -24,11 +22,10 @@
 const int PIN_RX_BT = 2;    // Conectar TX del Bluetooth aquí
 const int PIN_TX_BT = 4;    // Conectar RX del Bluetooth aquí
 const int PIN_SENSOR = A0;
-const int PIN_LED_TESTIGO = 13; // Usado para feedback y como último LED rojo
+const int PIN_LED_TESTIGO = 13; // Indicador de actividad
 
-// ARRAY DE LEDS: ORDENAR DESDE EL VERDE (BAJO) HASTA EL ROJO (ALTO)
-// IMPORTANTE: Pon aquí tus pines en orden físico exacto.
-// Ejemplo basado en tu diagrama: Verdes -> Amarillos -> Rojos
+// ARRAY DE LEDS: ORDEN FÍSICO (Verdes -> Amarillos -> Rojos)
+// Índices: 0-2 (Verdes), 3-5 (Amarillos), 6-7 (Rojos)
 int ledPins[] = {5, 6, 7, 8, 9, 10, 11, 12}; 
 const int LED_COUNT = 8;
 
@@ -38,282 +35,148 @@ SoftwareSerial BTSerial(PIN_RX_BT, PIN_TX_BT);
 // Variables de Control
 bool pruebaActiva = false;    
 unsigned long lastUpdate = 0;
-const int INTERVALO_ENVIO = 500; // 500ms para estabilidad de App
+const int INTERVALO_ENVIO = 500; // 500ms entre envíos a la App
 
 // Variables de Calibración
-int baseAireLimpio = 0;       // Valor de referencia inicial
-int umbralAlcohol = 0;        // Valor actual leído
-const int RANGO_DETECCION = 300; // Cuánto debe subir el valor para ser "máximo"
+int baseAireLimpio = 0;       // Referencia de aire limpio
+const int RANGO_DETECCION = 300; // Sensibilidad (Delta máximo)
 
 void setup() {
-  Serial.begin(9600);     // Para Monitor Serie (Debug PC)
-  BTSerial.begin(9600);   // Para App Inventor
+  Serial.begin(9600);     // Monitor Serie (PC)
+  BTSerial.begin(9600);   // Bluetooth (App)
 
-  // Configurar Pines
+  // Configurar Pines de Salida
   pinMode(PIN_LED_TESTIGO, OUTPUT);
   for (int i = 0; i < LED_COUNT; i++) {
     pinMode(ledPins[i], OUTPUT);
-    digitalWrite(ledPins[i], LOW); // Iniciar apagados
+    digitalWrite(ledPins[i], LOW);
   }
 
-  Serial.println("=== INICIANDO SISTEMA ALCOHOLIMETRO IOT ===");
+  Serial.println("=== ALCOHOLIMETRO IOT INICIADO ===");
   
-  // --- FASE 1: PRECALENTAMIENTO Y CALIBRACIÓN ---
-  // Muestra una animación en los LEDs mientras calibra
-  Serial.print("Calibrando sensor (No soplar)...");
+  // --- FASE 1: CALENTAMIENTO Y CALIBRACIÓN ---
+  Serial.print("Calibrando aire base (No soplar)...");
+  
   long acumulado = 0;
+  // Tomamos 20 muestras rápidas para fijar el "Cero"
   for(int i=0; i<20; i++) {
     acumulado += analogRead(PIN_SENSOR);
-    
-    // Animación de carga en LEDs
+    // Animación de espera en LEDs
     digitalWrite(ledPins[i % LED_COUNT], HIGH);
-    delay(100);
+    delay(50);
     digitalWrite(ledPins[i % LED_COUNT], LOW);
   }
   
-  // Fijamos la base: El promedio de las 20 lecturas iniciales
   baseAireLimpio = acumulado / 20;
-  Serial.print(" BASE FIJADA EN: ");
+  Serial.print(" BASE: ");
   Serial.println(baseAireLimpio);
-  Serial.println("SISTEMA LISTO. Esperando comando de App...");
   
-  // Parpadeo final de listo
-  digitalWrite(PIN_LED_TESTIGO, HIGH); delay(200); digitalWrite(PIN_LED_TESTIGO, LOW);
+  // Señal de LISTO
+  digitalWrite(PIN_LED_TESTIGO, HIGH); delay(500); digitalWrite(PIN_LED_TESTIGO, LOW);
+  Serial.println("SISTEMA LISTO. Esperando comando 'I'...");
 }
 
 void loop() {
-  // 1. ESCUCHA COMANDOS DE APP O PC
+  // 1. ESCUCHA COMANDOS (App o PC)
   verificarComandosEntrantes();
 
-  // 2. LÓGICA PRINCIPAL DE MEDICIÓN
+  // 2. MEDICIÓN Y PROCESAMIENTO
   if (pruebaActiva && (millis() - lastUpdate > INTERVALO_ENVIO)) {
     lastUpdate = millis();
 
-    // A) LEER CON FILTRO PROMEDIO (Suaviza la señal)
+    // A) LEER SENSOR (Con filtro promedio)
     int lecturaRaw = leerPromedioSensor(10); 
     
-    // B) CALCULAR NIVEL RELATIVO
-    // Restamos la base. Si da negativo, es 0.
+    // B) CALCULAR DELTA (Incremento sobre el aire limpio)
     int delta = lecturaRaw - baseAireLimpio;
     if (delta < 0) delta = 0;
 
-    // C) MAPEO INTELIGENTE A 8 LEDS
-    // Mapeamos el 'delta' (incremento) de 0 a RANGO_DETECCION hacia 0 a 8 LEDs
-    // Si delta es 0, nivel es 0. Si delta es 300, nivel es 8.
+    // C) MAPEO FÍSICO (0 a 8 LEDs)
+    // Convierte el delta (0-300) a escala de LEDs (0-8)
     int nivelLed = map(delta, 20, RANGO_DETECCION, 0, LED_COUNT);
     nivelLed = constrain(nivelLed, 0, LED_COUNT);
 
-    // D) VISUALIZACIÓN
-    mostrarBarraLeds(nivelLed);
-
-    // E) ENVÍO DE DATOS
-    enviarDatosApp(nivelLed);
+    // D) MAPEO LÓGICO APP (1, 2, 3)
+    // Traduce la escala de 8 LEDs a los 3 colores del semáforo
+    int nivelApp = 1; // Por defecto Verde (Sobrio)
     
-    // F) DEBUG EN PC (Para que tú veas qué pasa)
-    Serial.print("Base: "); Serial.print(baseAireLimpio);
-    Serial.print(" | Actual: "); Serial.print(lecturaRaw);
-    Serial.print(" | Delta: "); Serial.print(delta);
-    Serial.print(" | Nivel Env: "); Serial.println(nivelLed);
+    if (nivelLed <= 3) {
+      nivelApp = 1; // Verde (LEDs 0, 1, 2 encendidos o menos)
+    } 
+    else if (nivelLed > 3 && nivelLed <= 6) {
+      nivelApp = 2; // Amarillo (LEDs 3, 4, 5 encendidos)
+    } 
+    else if (nivelLed > 6) {
+      nivelApp = 3; // Rojo (LEDs 6, 7 encendidos)
+    }
+
+    // E) ACTUADORES
+    mostrarBarraLeds(nivelLed); // Muestra los 8 LEDs progresivos
+    enviarDatosApp(nivelApp);   // Envía solo 1, 2 o 3 a la App
+    
+    // F) DEBUG (Monitor Serie)
+    Serial.print("Delta: "); Serial.print(delta);
+    Serial.print(" | LEDs: "); Serial.print(nivelLed);
+    Serial.print("/8 | App: "); Serial.println(nivelApp);
   }
 }
 
 // ================= FUNCIONES AUXILIARES =================
 
-// Lee el sensor N veces y devuelve el promedio
 int leerPromedioSensor(int muestras) {
   long suma = 0;
   for(int i=0; i<muestras; i++) {
     suma += analogRead(PIN_SENSOR);
-    delay(5); // Pequeña pausa entre lecturas
+    delay(5);
   }
   return (int)(suma / muestras);
 }
 
-// Controla el encendido progresivo de la barra
 void mostrarBarraLeds(int nivel) {
-  // Apagar todos primero (limpieza)
-  for (int i = 0; i < LED_COUNT; i++) {
-    digitalWrite(ledPins[i], LOW);
-  }
+  // Apagar todos
+  for (int i = 0; i < LED_COUNT; i++) digitalWrite(ledPins[i], LOW);
 
   // Encender hasta el nivel actual
-  // Si nivel es 0, no enciende ninguno. 
-  // Si quieres que el primero siempre prenda, cambia "i < nivel" a "i <= nivel"
   for (int i = 0; i < nivel; i++) {
     digitalWrite(ledPins[i], HIGH);
   }
+  
+  // Opcional: Mantener siempre el primer LED verde tenue como "ON"
+  if (nivel == 0 && pruebaActiva) digitalWrite(ledPins[0], HIGH);
 }
 
 void enviarDatosApp(int valor) {
-  // Enviar número limpio + Salto de línea (CRUCIAL para App Inventor)
+  // Envía el número simplificado (1, 2 o 3) seguido de salto de línea
   BTSerial.println(valor);
 }
 
 void verificarComandosEntrantes() {
-  // --- REVISAR BLUETOOTH ---
+  // Comandos Bluetooth
   if (BTSerial.available()) {
-    char cmd = BTSerial.read();
-    procesarComando(cmd, "BT");
+    procesarComando(BTSerial.read(), "BT");
   }
-  
-  // --- REVISAR PC (Respaldo) ---
+  // Comandos PC
   if (Serial.available()) {
-    char cmd = Serial.read();
-    // Ignorar saltos de línea del monitor serie
-    if(cmd != '\n' && cmd != '\r') procesarComando(cmd, "PC");
+    char c = Serial.read();
+    if(c != '\n' && c != '\r') procesarComando(c, "PC");
   }
 }
 
 void procesarComando(char cmd, String fuente) {
-  Serial.print("Comando recibido de " + fuente + ": ");
-  Serial.println(cmd);
-
   if (cmd == 'I' || cmd == 'i' || cmd == '1') {
     pruebaActiva = true;
-    Serial.println("-> INICIANDO PRUEBA");
-    // Resetear base por si acaso el ambiente cambió
+    Serial.println("-> INICIANDO PRUEBA (" + fuente + ")");
+    // Recalibrar base al iniciar para mayor precisión
     baseAireLimpio = leerPromedioSensor(10);
   } 
   else if (cmd == 'X' || cmd == 'x' || cmd == '2') {
     pruebaActiva = false;
-    mostrarBarraLeds(0); // Apagar todo
-    Serial.println("-> PRUEBA DETENIDA");
+    mostrarBarraLeds(0);
+    Serial.println("-> PRUEBA DETENIDA (" + fuente + ")");
   }
   else if (cmd == 'S' || cmd == 's') {
-    Serial.println("-> GUARDANDO DATOS (Simulado)");
-    // Aquí iría tu lógica EEPROM si la necesitas
-    for(int k=0; k<3; k++) { // Parpadeo de confirmación
-       digitalWrite(PIN_LED_TESTIGO, HIGH); delay(50);
-       digitalWrite(PIN_LED_TESTIGO, LOW); delay(50);
-    }
+    Serial.println("-> GUARDANDO (" + fuente + ")");
+    // Feedback visual rápido
+    digitalWrite(PIN_LED_TESTIGO, HIGH); delay(100); digitalWrite(PIN_LED_TESTIGO, LOW);
   }
 }
-
-/*
- * ALCOHOLÍMETRO - LÓGICA MATEMÁTICA CORREGIDA
- * Objetivo: Aumentar sensibilidad para detectar aliento humano.
-
-#include <SoftwareSerial.h>
-#include <EEPROM.h>
-
-// --- PINES ---
-const int PIN_RX_BT = 2;  
-const int PIN_TX_BT = 4;  
-const int PIN_SENSOR = A0;
-const int PIN_LED_TESTIGO = 13;
-
-// PINES DE LEDS (Ajusta a tu orden real: Verde -> Rojo)
-int ledPins[] = {5, 6, 7, 8, 9, 10, 11, 12}; 
-const int LED_COUNT = 8;
-
-SoftwareSerial BTSerial(PIN_RX_BT, PIN_TX_BT);
-
-// --- VARIABLES MATEMÁTICAS ---
-bool pruebaActiva = false;
-int valorBaseAire = 0;        // Valor del sensor en reposo (se autocalibra)
-const int UMBRAL_MINIMO = 10; // Ruido mínimo para empezar a medir
-const int UMBRAL_MAXIMO = 250;// Valor DELTA máximo (Sensibilidad alta)
-                              // Si sube 250 unidades sobre la base, es el máximo nivel.
-                              // BAJA este número si quieres que sea MÁS sensible.
-
-unsigned long lastUpdate = 0;
-
-void setup() {
-  Serial.begin(9600);
-  BTSerial.begin(9600);
-
-  pinMode(PIN_LED_TESTIGO, OUTPUT);
-  for (int i = 0; i < LED_COUNT; i++) pinMode(ledPins[i], OUTPUT);
-
-  Serial.println("--- INICIANDO CALIBRACION DE AIRE ---");
-  Serial.println("NO SOPLES EL SENSOR AUN...");
-  
-  // Tomar 50 lecturas para sacar el promedio del aire limpio
-  long suma = 0;
-  for(int i=0; i<50; i++){
-    suma += analogRead(PIN_SENSOR);
-    digitalWrite(PIN_LED_TESTIGO, !digitalRead(PIN_LED_TESTIGO)); // Parpadeo
-    delay(50);
-  }
-  valorBaseAire = suma / 50;
-  
-  Serial.print("CALIBRADO. Valor Base Aire: ");
-  Serial.println(valorBaseAire);
-  Serial.println("Listo para detectar alcohol.");
-  digitalWrite(PIN_LED_TESTIGO, LOW);
-}
-
-void loop() {
-  // 1. COMANDOS
-  if (BTSerial.available()) {
-    char cmd = BTSerial.read();
-    if (cmd == 'I' || cmd == 'i' || cmd == '1') {
-      pruebaActiva = true;
-      // Recalibrar rápido al iniciar prueba (opcional)
-      // valorBaseAire = analogRead(PIN_SENSOR); 
-      Serial.println("INICIANDO PRUEBA...");
-    }
-    else if (cmd == 'X' || cmd == 'x' || cmd == '2') {
-      pruebaActiva = false;
-      apagarLeds();
-      Serial.println("DETENIDO.");
-    }
-  }
-  
-  // Comandos Debug PC
-  if (Serial.available()) {
-    char c = Serial.read();
-    if(c=='1') pruebaActiva=true;
-    if(c=='2') { pruebaActiva=false; apagarLeds(); }
-  }
-
-  // 2. LÓGICA MATEMÁTICA
-  if (pruebaActiva && (millis() - lastUpdate > 300)) {
-    lastUpdate = millis();
-
-    int lecturaActual = analogRead(PIN_SENSOR);
-    
-    // Cálculo del DELTA (Diferencia respecto a la base)
-    // Si la base es 150 y lees 180, el delta es 30.
-    int delta = lecturaActual - valorBaseAire;
-    
-    // Filtro de negativos (por si oscila hacia abajo)
-    if (delta < 0) delta = 0;
-
-    // MAPEO CORREGIDO
-    // Mapeamos el DELTA (0 a 250) a los LEDs (0 a 8)
-    // Si delta < UMBRAL_MINIMO, el resultado será 0 (filtro de ruido)
-    int nivelLed = 0;
-    
-    if (delta > UMBRAL_MINIMO) {
-       nivelLed = map(delta, UMBRAL_MINIMO, UMBRAL_MAXIMO, 1, LED_COUNT);
-    }
-    
-    // Restricción final
-    nivelLed = constrain(nivelLed, 0, LED_COUNT);
-
-    // Visualización
-    mostrarNivelEnLEDs(nivelLed);
-    BTSerial.println(nivelLed); // Enviar a App
-
-    // Debug Matemático
-    Serial.print("Base: "); Serial.print(valorBaseAire);
-    Serial.print(" | Actual: "); Serial.print(lecturaActual);
-    Serial.print(" | Delta: "); Serial.print(delta);
-    Serial.print(" | NIVEL CALCULADO: "); Serial.println(nivelLed);
-  }
-}
-
-void mostrarNivelEnLEDs(int nivel) {
-  for (int i = 0; i < LED_COUNT; i++) {
-    // < nivel enciende los acumulados.
-    // Ejemplo: Nivel 3 enciende 0, 1 y 2.
-    if (i < nivel) digitalWrite(ledPins[i], HIGH);
-    else digitalWrite(ledPins[i], LOW);
-  }
-}
-
-void apagarLeds() {
-  for (int i = 0; i < LED_COUNT; i++) digitalWrite(ledPins[i], LOW);
-}
- */
