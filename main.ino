@@ -28,7 +28,6 @@
  */
 
 #include <SoftwareSerial.h>
-#include <EEPROM.h>
 
 // --- Pines Config ---
 const int PIN_RX_BT = 2;    // TX del Bluetooth
@@ -113,8 +112,15 @@ void loop() {
 
     // 2.3 Mapeo Físico (Hardware 0-8 LEDs)
     // Conversion magnitud química (0-350) a visual (0-8)
-    int nivelLed = map(delta, 20, RANGO_DETECCION, 0, LED_COUNT);
-    nivelLed = constrain(nivelLed, 0, LED_COUNT);
+    int nivelLed;
+    if (delta < 20) {
+      nivelLed = 0; // Zona muerta para evitar ruido
+    } else if (delta > RANGO_DETECCION) {
+      nivelLed = LED_COUNT; // Saturación
+      // Enviar alerta especial a la app
+    } else {
+      nivelLed = map(delta, 20, RANGO_DETECCION, 0, LED_COUNT);
+    }
 
     // 2.4 Mapeo Lógico (Software App 1-3)
     // Categorización semántica para el usuario final
