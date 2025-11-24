@@ -1,12 +1,15 @@
 # B.A.R.T. (Biometric Alcohol Real-time Tracker)
 
-![Status](https://img.shields.io/badge/Status-Finalizado-success)
+<img width="64" height="64" alt="BART_Project_Icon 1" src="https://github.com/user-attachments/assets/5673729d-81f5-48a7-8320-8e33f82a0819" /> ![Status](https://img.shields.io/badge/Status-Finalizado-success)
 ![Platform](https://img.shields.io/badge/PLATFORM-ARDUINO%20UNO-blue)
 ![App](https://img.shields.io/badge/APP-MIT%20APP%20INVENTOR-orange)
 
 > **Sistema IoT de telemetría biométrica para la detección y monitoreo de alcohol en tiempo real.**
 
 ---
+
+![unnamed](https://github.com/user-attachments/assets/163b06b7-8476-43b3-b9e7-c2836004b163)
+> Designed by @trbureiyan
 
 ## Descripción del Proyecto
 
