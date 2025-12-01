@@ -46,6 +46,8 @@ Proyecto final desarrollado para la asignatura de **Computación Física** en la
 
 ### Hardware (Dispositivo Físico)
 
+<img width="640" height="478" alt="image" src="https://github.com/user-attachments/assets/ce8be6cd-e959-49df-a084-712cd50311be" />
+
 * **🎯 Autocalibración de Punto Cero:** Al iniciar, el sistema muestrea el aire ambiente durante 5 segundos para establecer una línea base dinámica, compensando cambios de humedad, temperatura y altitud
 
 * **🔊 Procesamiento Digital de Señales (DSP):** Implementación de filtros de promedio móvil (oversampling de 10 muestras) para estabilizar la lectura analógica del sensor MQ-3 y reducir ruido
@@ -237,6 +239,8 @@ Al encender el Arduino, deberías ver:
 ---
 
 ## 🚀 Uso del Sistema
+
+<img width="640" height="478" alt="image" src="https://github.com/user-attachments/assets/990607a6-0136-4747-af4c-2764fd8c9bd4" />
 
 ### Encendido y Calibración Inicial
 
