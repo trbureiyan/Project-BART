@@ -46,7 +46,7 @@ Proyecto final desarrollado para la asignatura de **Computación Física** en la
 
 ### Hardware (Dispositivo Físico)
 
-<img width="500" height="374" alt="BART Core" src="https://github.com/user-attachments/assets/ce8be6cd-e959-49df-a084-712cd50311be" /> <img width="500" height="374" alt="technical art" src="https://github.com/user-attachments/assets/639f2e0d-cc2e-4939-8d99-f932d614395b" />
+<img width="447" height="324" alt="BART Core" src="https://github.com/user-attachments/assets/ce8be6cd-e959-49df-a084-712cd50311be" /> <img width="447" height="324" alt="technical art" src="https://github.com/user-attachments/assets/639f2e0d-cc2e-4939-8d99-f932d614395b" />
 
 
 * **🎯 Autocalibración de Punto Cero:** Al iniciar, el sistema muestrea el aire ambiente durante 5 segundos para establecer una línea base dinámica, compensando cambios de humedad, temperatura y altitud
